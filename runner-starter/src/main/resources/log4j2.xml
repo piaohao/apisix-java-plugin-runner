@@ -20,9 +20,9 @@
 <configuration status="OFF">
 
     <Properties>
-        <Property name="LOG_LEVEL">debug</Property>
+        <Property name="LOG_LEVEL">info</Property>
         <Property name="USER_DIR">${sys:user.dir}</Property>
-        <Property name="FILE_ENCODING">${sys:file.encoding}</Property>
+        <Property name="FILE_ENCODING">UTF-8</Property>
     </Properties>
 
     <Appenders>

@@ -26,14 +26,17 @@ import com.alibaba.nacos.api.PropertyKeyConst;
 import com.alibaba.nacos.api.exception.NacosException;
 import com.alibaba.nacos.api.naming.NamingService;
 import com.alibaba.nacos.api.naming.pojo.Instance;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.apisix.plugin.runner.HttpRequest;
 import org.apache.apisix.plugin.runner.HttpResponse;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 
+@Slf4j
 @Component
 public class GrayFilter implements PluginFilter {
 
@@ -103,9 +106,11 @@ public class GrayFilter implements PluginFilter {
 //        String body = request.getBody();
 
         String upstreamId = conf.getString("upstream_id");
+        log.info("upstream_id:{}", upstreamId);
 
         //get grayName
-        String grayName = request.getVars("http_grayName");
+        String grayName = request.getHeader("gray-name");
+        log.info("headers信息={}", JSON.toJSONString(request.getHeaders()));
         if (StrUtil.isBlank(grayName)) {
             chain.filter(request, response);
             return;
@@ -115,6 +120,7 @@ public class GrayFilter implements PluginFilter {
                 .header("x-api-key", "edd1c9f034335f136f87ad84b625c8f1")
                 .execute()
                 .body();
+        log.info("上游信息={}", body);
         JSONObject json = JSON.parseObject(body);
         JSONObject value = json.getJSONObject("value");
         if (value.containsKey("service_name")) {
@@ -129,13 +135,16 @@ public class GrayFilter implements PluginFilter {
                 properties.put(PropertyKeyConst.NAMESPACE, namespace);
                 NamingService namingService = NacosFactory.createNamingService(properties);
                 List<Instance> allInstances = namingService.getAllInstances(serviceName, group);
+                log.info("nacos服务={}", JSON.toJSONString(allInstances));
                 boolean hasGrayService = allInstances.stream()
-                        .anyMatch(ins -> ins.isHealthy() && ins.containsMetadata("grayName") && ins.getMetadata().get("grayName").equals(grayName));
+                        .anyMatch(ins -> ins.isHealthy() && ins.containsMetadata("gray-name") && ins.getMetadata().get("gray-name").equals(grayName));
                 if (hasGrayService) {
-                    request.setHeader("forceGray", "true");
+                    log.info("设置请求头");
+                    request.setHeader("force-gray", "true");
+                    request.setVars(Map.of("force-gray", "true"));
                 }
             } catch (NacosException e) {
-                e.printStackTrace();
+                log.error(e.getMessage(), e);
             }
         } else if (value.containsKey("nodes")) {
             try {
@@ -151,12 +160,15 @@ public class GrayFilter implements PluginFilter {
                     hasGrayService = false;
                 }
                 if (hasGrayService) {
-                    request.setHeader("forceGray", "true");
+                    log.info("设置请求头");
+                    request.setHeader("force-gray", "true");
+                    request.setVars(Map.of("force-gray", "true"));
                 }
             } catch (Exception e) {
-                e.printStackTrace();
+                log.error(e.getMessage(), e);
             }
         }
+//        log.info("headers:{}", JSON.toJSONString(request.getHeaders()));
         chain.filter(request, response);
     }
 
